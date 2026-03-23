@@ -207,3 +207,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   hitPoints: 5
   goldWorth: 30
+  floatingTextPrefab: {fileID: 2951986032583427310, guid: c1ea17d8e71380f49b252f03033f4670,
+    type: 3}

@@ -1,22 +1,29 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TMPro; // Bắt buộc phải có để điều khiển font chữ bạn vừa cài
+using TMPro;
 
 public class BuildManager : MonoBehaviour
 {
     public static BuildManager main;
 
     [Header("References")]
-    [SerializeField] private GameObject[] towerPrefabs; // Kéo 3 Tank Prefab vào đây
-    [SerializeField] private int[] towerCosts = { 50, 100, 200 }; // Giá của Tank 1, 2, 3
+    [SerializeField] private GameObject[] towerPrefabs;
+    [SerializeField] private int[] towerCosts = { 50, 100, 200 };
+
+    [Header("Upgrade Settings")]
+    [SerializeField] private GameObject[] upgradePrefabs;
+    [SerializeField] private int[] upgradeCosts = { 100, 150, 250 };
 
     [Header("UI Settings")]
-    [SerializeField] private TextMeshProUGUI goldText;    // Kéo đối tượng GoldText vào đây
-    [SerializeField] private GameObject warningUI;       // Kéo đối tượng WarningText vào đây
+    [SerializeField] private TextMeshProUGUI goldText;
+    [SerializeField] private GameObject warningUI;
+    [SerializeField] private GameObject floatingTextPrefab;
 
     private int selectedTowerIndex = 0;
-    public int currency = 500; // Tiền khởi đầu
+    public int currency = 500;
+
+    private bool isWarningRunning = false; // Biến chặn nháy Warning
 
     private void Awake()
     {
@@ -25,100 +32,109 @@ public class BuildManager : MonoBehaviour
 
     private void Start()
     {
-        UpdateGoldUI(); // Hiển thị số tiền ngay khi vào game
-        if (warningUI != null) warningUI.SetActive(false); // Ẩn thông báo lúc đầu
+        UpdateGoldUI();
+        if (warningUI != null) warningUI.SetActive(false);
     }
 
-    // --- LOGIC MUA BÁN ---
+    // --- LOGIC LẤY DỮ LIỆU ---
+    public void SetSelectedTower(int index) { selectedTowerIndex = index; }
+    public int GetSelectedTowerIndex() { return selectedTowerIndex; }
+    public GameObject GetSelectedTower() { return towerPrefabs[selectedTowerIndex]; }
+    public int GetSelectedTowerCost() { return towerCosts[selectedTowerIndex]; }
+    public GameObject GetUpgradePrefab(int index) { return upgradePrefabs[index]; }
+    public int GetUpgradeCost(int index) { return upgradeCosts[index]; }
 
-    public GameObject GetSelectedTower()
-    {
-        return towerPrefabs[selectedTowerIndex];
-    }
+    // --- LOGIC KINH TẾ ---
+    public bool CanAfford(int amount) { return currency >= amount; }
 
-    public int GetSelectedTowerCost()
-    {
-        return towerCosts[selectedTowerIndex];
-    }
-
-    public void SetSelectedTower(int index)
-    {
-        selectedTowerIndex = index;
-    }
-
-    public bool CanAfford(int amount)
-    {
-        return currency >= amount;
-    }
-
-    public void SpendCurrency(int amount)
+    public void SpendCurrency(int amount, Vector3 pos)
     {
         currency -= amount;
         UpdateGoldUI();
-        Debug.Log("Đã trừ tiền. Còn lại: " + currency);
+        // Chỉ hiện chữ bay 1 lần duy nhất
+        ShowFloatingText("-" + amount, pos, Color.red);
     }
 
-    public void AddCurrency(int amount)
+    public void AddCurrency(int amount, Vector3 pos)
     {
         currency += amount;
         UpdateGoldUI();
-        Debug.Log("Đã nhận tiền! Tổng cộng: " + currency);
+        ShowFloatingText("+" + amount, pos, Color.yellow);
     }
-
-    // --- CẬP NHẬT GIAO DIỆN (UI) ---
 
     private void UpdateGoldUI()
     {
-        if (goldText != null)
+        if (goldText != null) goldText.text = " " + currency;
+    }
+
+    // --- HIỆU ỨNG UI ---
+    private void ShowFloatingText(string message, Vector3 worldPos, Color textColor)
+    {
+        if (floatingTextPrefab != null)
         {
-            goldText.text = "GOLD: " + currency;
+            GameObject canvas = GameObject.Find("Canvas");
+            if (canvas == null) return;
+
+            GameObject textObj = Instantiate(floatingTextPrefab, canvas.transform);
+            Vector2 screenPosition = Camera.main.WorldToScreenPoint(worldPos);
+            textObj.transform.position = screenPosition;
+
+            var tmpro = textObj.GetComponent<TextMeshProUGUI>();
+            if (tmpro != null)
+            {
+                tmpro.text = message;
+                tmpro.color = textColor;
+            }
         }
     }
 
-    // Hàm gọi thông báo lỗi
     public void ShowWarning()
     {
+        // Nếu đang hiện cảnh báo rồi thì không chạy đè thêm lần nữa
+        if (isWarningRunning) return;
+
         if (warningUI != null)
         {
-            StopAllCoroutines(); // Dừng các hiệu ứng cũ đang chạy dở
             StartCoroutine(WarningRoutine());
         }
     }
 
     private IEnumerator WarningRoutine()
     {
+        isWarningRunning = true;
         warningUI.SetActive(true);
+
         TextMeshProUGUI text = warningUI.GetComponent<TextMeshProUGUI>();
         Vector3 originalPos = warningUI.transform.localPosition;
+        Color originalColor = (text != null) ? text.color : Color.white;
 
-        // 1. Hiệu ứng Rung (Shake)
+        // 1. Rung
         float elapsed = 0f;
-        float duration = 0.4f; // Rung trong 0.4 giây
+        float duration = 0.4f;
         while (elapsed < duration)
         {
-            float x = Random.Range(-10f, 10f);
-            float y = Random.Range(-10f, 10f);
+            float x = Random.Range(-5f, 5f);
+            float y = Random.Range(-5f, 5f);
             warningUI.transform.localPosition = new Vector3(originalPos.x + x, originalPos.y + y, originalPos.z);
             elapsed += Time.deltaTime;
             yield return null;
         }
-        warningUI.transform.localPosition = originalPos; // Trả về vị trí cũ
+        warningUI.transform.localPosition = originalPos;
 
-        // 2. Chờ một chút
-        yield return new WaitForSeconds(0.8f);
+        yield return new WaitForSeconds(0.6f);
 
-        // 3. Hiệu ứng Mờ dần (Fade Out)
+        // 2. Mờ dần
         if (text != null)
         {
-            Color originalColor = text.color;
-            for (float t = 1; t > 0; t -= Time.deltaTime * 1.5f) // Tốc độ mờ
+            for (float t = 1; t > 0; t -= Time.deltaTime * 2f)
             {
                 text.color = new Color(originalColor.r, originalColor.g, originalColor.b, t);
                 yield return null;
             }
-            text.color = originalColor; // Reset độ mờ về 1 cho lần sau hiện lại
+            text.color = originalColor; // Reset Alpha về 1
         }
 
         warningUI.SetActive(false);
+        isWarningRunning = false;
     }
 }
